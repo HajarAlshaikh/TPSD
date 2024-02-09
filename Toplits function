@@ -1,0 +1,706 @@
+function Toeplitz_position(i, n)
+    # this function retrn each index to one of the value 2n-1
+    position1 = [s * n + 1 for s in 1:n-1]
+    position2 = [i for i in 2:n]
+
+
+    while i > n || i ∈ position2
+
+        if i ∈ position1
+            i = findfirst(x -> x == i, position1) + 1
+            break
+        elseif i ∈ position2
+            i = n + (i - 1)
+            break
+        end
+        i = i - n - 1
+
+    end
+    return i
+end
+
+function map_indices(n, omega)
+    hankel_indices = Dict()
+    for i = 1:n^2
+        pos = hankel_position(i, n)
+        if pos in omega
+            if haskey(hankel_indices, pos)
+                push!(hankel_indices[pos], i)
+            else
+                hankel_indices[pos] = [i]
+            end
+        end
+    end
+    indices = sort(collect(values(hankel_indices)))
+    return vcat(indices...)
+end
+
+function ihvec(v::Vector{T} where {T<:Real})
+
+    m = length(v)
+
+    n = cld(m + 1, 2)
+
+    h = Vector{Float64}(undef, m)
+
+    h[1:n] = [1 / sqrt(i) for i in 1:n] .* v[1:n]
+
+    h[n+1:end] = [1 / sqrt(n - i) for i in 1:n-1] .* v[n+1:end]
+
+    hankel = Array{Float64,2}(undef, n, n)
+
+    for row in 1:n
+
+        for col in 1:n
+
+            hankel[row, col] = h[row+col-1]
+
+        end
+
+    end
+
+    return hankel
+
+end
+
+
+function create_toeplitz(v)
+    n = Int((length(v) + 1) / 2)
+    T = zeros(n, n)
+
+    for i in 1:n
+        for j in 1:n
+            if i == j
+                T[i, j] = v[1]
+            end
+            if i == 1
+                if j > i
+                    T[i, j] = v[j]
+                end
+            elseif j == 1
+                if i > j
+                    T[i, j] = v[n+i-1]
+                end
+            else
+                T[i, j] = T[i-1, j-1]
+            end
+        end
+    end
+
+    return T
+end
+function project_to_Toplitz(A)
+    m, n = size(A)
+    averages = zeros(m, n)
+
+    for i in 1:m
+        for j in 1:n
+            diagonal_sum = 0
+            count = 0
+            k, l = i, j
+
+            while k <= m && l <= n
+                diagonal_sum += A[k, l]
+                count += 1
+                k += 1
+                l += 1
+            end
+
+            averages[i, j] = real(diagonal_sum / count)
+        end
+    end
+
+    toeplitz_matrix = zeros(m, n)
+
+    for i in 1:m
+        for j in 1:n
+            if i >= j
+                toeplitz_matrix[i, j] = averages[i-j+1, 1]
+            else
+                toeplitz_matrix[i, j] = averages[1, j-i+1]
+            end
+        end
+    end
+
+    return toeplitz_matrix
+end
+function project_to_PSD(f)
+    n = size(f, 1)
+    λ, U = eigen(f)
+    λ = real(λ)
+    λ[λ.<0] .= 0
+
+    S = U * Diagonal(λ) * U'
+    return S
+
+end
+function select_indices(n::Int)
+    # we use this selection as omega when the size of n is even (if i have i=1:n columns ,
+    # and if i isodd , then select the even index and if the i iseven then select the odd index)
+
+
+
+    indices = Set{Int}()
+
+    for i in 1:n
+        if isodd(i)
+            for j in 2:2:n
+                push!(indices, (i - 1) * n + j)
+            end
+        else
+            for j in 1:2:n
+                push!(indices, (i - 1) * n + j)
+            end
+        end
+    end
+
+    return collect(indices)
+end
+function select_indices1(n::Int)
+    # we use this selection as omega when the size of n is even (if i have i=1:n columns ,
+    # and if i isodd , then select the odd index and if the i iseven then select the even index)
+    indices = Set{Int}()
+
+    for i in 1:n
+        if isodd(i)
+            for j in 1:2:n
+                push!(indices, (i - 1) * n + j)
+            end
+        else
+            for j in 2:2:n
+                push!(indices, (i - 1) * n + j)
+            end
+        end
+    end
+
+    return collect(indices)
+end
+function Projection_completion(f::Vector{<:Real}, n)
+
+    F = create_toeplitz(f)
+    if isodd(n) == true
+        Omega = collect(2:2:n^2)
+    elseif iseven(n) == true
+        Omega = select_indices(n)
+    end
+    omega = Toeplitz_position.(Omega, n)
+
+    v = zeros(2n - 1)
+    Fzero = copy(F)
+    v[omega] = F[Omega]
+    iteration = 1000_000_0
+    norm_diff = Inf
+    for i in 1:10000000
+        P_G = F
+        P_S = project_to_PSD(F)
+        P_T = project_to_Toplitz(P_S)
+        P_T[Omega] = Fzero[Omega]
+        PPF = F + P_T - P_G
+        norm_diff = norm(PPF - F)
+        if norm_diff < 1e-6
+            iteration = i
+            break
+        end
+        F = PPF
+    end
+    F, iteration, norm_diff
+end
+
+
+function Projection_approx(f::Vector{<:Real}, n)
+    F = create_toeplitz(f)
+    Omega = collect(2:2:n^2)
+    omega = Toeplitz_position.(Omega, n)
+    Fzero = copy(F)
+    iteration = 1000_000_0
+    norm_diff = Inf
+    for i in 1:10000000
+        P_G = F
+        P_S = project_to_PSD(F)
+        P_T = project_to_Toplitz(P_S)
+        PPF = F + P_T - P_G
+        norm_diff = norm(PPF - F)
+        if norm_diff < 1e-6
+            iteration = i
+            break
+        end
+        F = PPF
+    end
+    F, iteration, norm_diff
+end
+
+function Projection_approx_starting(f::Vector{<:Real}, n)
+    F = create_toeplitz(f)
+    Omega = collect(2:2:n^2)
+    omega = Toeplitz_position.(Omega, n)
+    Fzero = copy(F)
+    for i in 1:500000
+        P_G = F
+        P_S = project_to_PSD(F)
+        P_T = project_to_Toplitz(P_S)
+        PPF = F + P_T - P_G
+        if norm(PPF - F) < 1e-8
+            break
+        end
+        F = PPF
+    end
+    F
+end
+
+function solveitSDT_approx(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, hvecC, v == vcat([√j for j in n:-1:1], [sqrt(n - j) for j in 1:(n-1)]) .* (f - vcat(T[1, :], T[2:end, 1])))
+
+    @constraint(model, [I(2n - 1) v; v' t] in PSDCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+function solveitSDT_completion(f::Vector{<:Real}, solver)
+    # THIS FUNCTION OPTIMAL WHEN WE FIX THE DATA 2:2:2N-1 AND ITS NOT FEASIBLE WHEN WE FIX DATA 1:2:2N-1
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+
+    model = Model(solver)
+    # set_silent(model)
+
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, w[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+
+    @constraint(model, w == vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, [i in 2:2:2n-1], w[i] == f[i])
+
+    @constraint(model, hvecC, v == vcat([√j for j in n:-1:1], [sqrt(n - j) for j in 1:(n-1)]) .* (f - w))
+
+    @constraint(model, [I(2n - 1) v; v' t] in PSDCone())
+
+    @objective(model, Min, t)
+    optimize!(model)
+    # set_start_values(model; variable_primal_start=initial_value)
+    # set_optimal_start_values(model)
+    # optimize!(model)
+    return value.(T)
+    println(solution_summary(model))
+
+
+end
+
+function solveitSQV_approx(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, T[1:n, 1:n], PSD)
+
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, [t; f - vcat(T[1, :], T[2:end, 1])] in SecondOrderCone())
+
+    @objective(model, Min, t)
+
+    println(model)
+    optimize!(model)
+    return value.(T)
+    println(solution_summary(model))
+
+
+end
+
+
+function solveitSQV_completion(f::Vector{<:Real}, solver)
+    # THIS FUNCTION OPTIMAL WHEN WE FIX THE DATA 2:2:2N-1 AND ITS NOT FEASIBLE WHEN WE FIX DATA 1:2:2N-1
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, T[1:n, 1:n], PSD)
+    @variable(model, w[1:2n-1])
+
+    @constraint(model, w == vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+    @constraint(model, [i in 2:2:2n-1], w[i] == f[i])
+    @constraint(model, [t; f - w] in SecondOrderCone())
+
+    @objective(model, Min, t)
+
+    println(model)
+    optimize!(model)
+    println(solution_summary(model))
+    return value.(T)
+
+
+end
+
+function solveitSQT_approx(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, hvecC, v == vcat([√j for j in n:-1:1], [sqrt(n - j) for j in 1:(n-1)]) .* (f - vcat(T[1, :], T[2:end, 1])))
+
+    @constraint(model, [t; v] in SecondOrderCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+    return value.(T)
+    println(solution_summary(model))
+
+
+end
+
+# THIS FUNCTION OPTIMAL WHEN WE FIX THE DATA 2:2:2N-1 AND ITS NOT FEASIBLE WHEN WE FIX DATA 1:2:2N-1
+function solveitSQT_completion(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+    @variable(model, w[1:2n-1])
+
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, w == vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [i in 2:2:2n-1], w[i] == f[i])
+
+    @constraint(model, hvecC, v == vcat([√j for j in n:-1:1], [sqrt(n - j) for j in 1:(n-1)]) .* (f - w))
+
+    @constraint(model, [t; v] in SecondOrderCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+
+function solveitSDV_approx(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+    @constraint(model, vecC, v == f - vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [I(2n - 1) v; v' t] in PSDCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+
+
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+
+function solveitSDV_approx(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, vecC, v == f - vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [I(2n - 1) v; v' t] in PSDCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+
+
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+
+function solveitSDV_completion(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+    @variable(model, w[1:2n-1])
+
+    @constraint(model, w .== vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [i in 2:2:2n-1], w[i] == f[i])
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, vecC, v .== f - w)
+
+    @constraint(model, [I(2n - 1) v; v' t] in PSDCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+
+
+function solveitSQQ_approx(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    # model = Model(SCS.Optimizer)
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v1[1:2n-1])
+    @variable(model, v2[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+    @variable(model, y[1:2n-1])
+    @variable(model, q[1:2n-1])
+
+    @constraint(model, q == vcat([k for k in n:-1:1], [(n - k) for k in 1:(n-1)]) .* (-f))
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, y == vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, vec1, v1 == vcat([√k for k in 1:n], [(n - k)^(0.5) for k in 1:(n-1)]) .* (y))
+
+    @constraint(model, vec2, v2 == vcat([(k)^(-0.5) for k in 1:n], [(n - k)^(-0.5) for k in 1:(n-1)]) .* (q))
+
+    @constraint(model, [t; v1 + v2] in SecondOrderCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+
+function solveitSQQ_completion(f::Vector{<:Real}, solver)
+
+    m, = size(f)
+
+    n = cld(m + 1, 2)
+
+    #   model = Model(SCS.Optimizer)
+    model = Model(solver)
+    # set_silent(model)
+    @variable(model, t >= 0)
+    @variable(model, v1[1:2n-1])
+    @variable(model, v2[1:2n-1])
+    @variable(model, T[1:n, 1:n], PSD)
+    @variable(model, y[1:2n-1])
+    @variable(model, q[1:2n-1])
+
+    @constraint(model, q == vcat([k for k in n:-1:1], [(n - k) for k in 1:(n-1)]) .* (-f))
+
+    @constraint(model, [i in 1:n-1], T[i, i] == T[i+1, i+1])
+
+    @constraint(model, T[n, n] == T[1, 1])
+
+    @constraint(model, [i in 2:n, j in 2:n], T[i, j] == T[i-1, j-1])
+
+    @constraint(model, y == vcat(T[1, :], T[2:end, 1]))
+
+    @constraint(model, [i in 2:2:2n-1], y[i] == f[i])
+
+    @constraint(model, vec1, v1 == vcat([√k for k in 1:n], [(n - k)^(0.5) for k in 1:(n-1)]) .* (y))
+
+    @constraint(model, vec2, v2 == vcat([(k)^(-0.5) for k in 1:n], [(n - k)^(-0.5) for k in 1:(n-1)]) .* (q))
+
+
+    @constraint(model, [t; v1 + v2] in SecondOrderCone())
+
+    @objective(model, Min, t)
+
+    optimize!(model)
+
+    return value.(T)
+    println(solution_summary(model))
+
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
