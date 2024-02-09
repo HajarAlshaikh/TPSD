@@ -1,0 +1,295 @@
+using JuMP, SCS
+using Random, LinearAlgebra
+using Statistics
+using StatsBase
+
+include("Toplits function.jl")
+
+n = 200
+
+solver = optimizer_with_attributes(SCS.Optimizer, "max_iters" => 1e+6, "eps_abs" => 1e-7, "eps_rel" => 1e-7)
+rng1 = MersenneTwister(80230)
+
+M = rand(rng1, -100:100, n, n)
+
+
+#expermint
+d = vcat(M[1, :], M[2:end, 1])
+Projex = Projection_approx_starting(d, n)
+s = vcat(Projex[1, :], Projex[2:end, 1])
+# in projection only if n is odd let omega = collect(1:2:(2n-1))
+#and if n is even let omega= collect(2:2:(2n-1))
+omega = collect(1:2:(2n-1))
+Omega= select_indices1(n) #only at projection when n is even
+omega=unique(Toeplitz_position.(Omega, n))
+
+s = vcat(Projex[1, :], Projex[2:end, 1])
+s[omega] .= 0
+
+#s1 = vcat(F[1, :], F[2:end, end])
+s1 = vcat(Projex[1, :], Projex[2:end, 1])
+s1[omega] .= sum(s1) / length(s1)
+s1
+#s2 = vcat(F[1, :], F[2:end, end])
+s2 = vcat(Projex[1, :], Projex[2:end, 1])
+# s2[omega] .= rand()
+s2[omega] .= rand((minimum(s2):maximum(s2)))
+
+s3 = vcat(Projex[1, :], Projex[2:end, 1])
+s3[omega] .= median(s3)
+
+s4 = vcat(Projex[1, :], Projex[2:end, 1])
+s4[omega] .= StatsBase.mode(Projex[:])
+
+s5 = vcat(Projex[1, :], Projex[2:end, 1])
+s5[omega] .= maximum(s5)
+
+s6 = vcat(Projex[1, :], Projex[2:end, 1])
+
+s6[omega] .= minimum(s6)
+
+s7 = vcat(Projex[1, :], Projex[2:end, 1])
+s7[omega] .= rand()
+
+create_toeplitz(s)
+# ProjC_0 = Projection_completion(s, n)
+resultc, etc = @timed Projection_completion(s, n)
+ProjC_0, ProjC_0_iter = resultc
+# SDTC_0 = solveitSDT_completion(s, solver)
+SQVC_0 = solveitSQV_completion(s, solver)
+SQTC_0 = solveitSQT_completion(s, solver)
+SQQC_0 = solveitSQQ_completion(s, solver)
+
+# ProjC_MEAN = Projection_completion(s1, n)
+resultc1, etc1 = @timed Projection_completion(s1, n)
+ProjC_MEAN, ProjC_MEAN_iter = resultc1
+# SDTC_MEAN = solveitSDT_completion(s1, solver)
+SQVC_MEAN = solveitSQV_completion(s1, solver)
+SQTC_MEAN = solveitSQT_completion(s1, solver)
+SQQC_MEAN = solveitSQQ_completion(s1, solver)
+
+# ProjC_r = Projection_completion(s2, n)
+resultc2, etc2 = @timed Projection_completion(s2, n)
+ProjC_r_interval, ProjC_r_interval_iter = resultc2
+# SDTC_r_interval = solveitSDT_completion(s2, solver)
+SQVC_r_interval = solveitSQV_completion(s2, solver)
+SQTC_r_interval = solveitSQT_completion(s2, solver)
+SQQC_r_interval = solveitSQQ_completion(s2, solver)
+
+
+resultc3, etc3 = @timed Projection_completion(s3, n)
+ProjC_m, ProjC_m_iter = resultc3
+# SDHC_m = solveitSDT_completion(s3, solver)
+SQVC_m = solveitSQV_completion(s3, solver)
+SQTC_m = solveitSQT_completion(s3, solver)
+SQQC_m = solveitSQQ_completion(s3, solver)
+
+resultc4, etc4 = @timed Projection_completion(s4, n)
+ProjC_mode, ProjC_mode_iter = resultc4
+# SDTC_mode = solveitSDT_completion(s4, solver)
+SQVC_mode = solveitSQV_completion(s4, solver)
+SQTC_mode = solveitSQT_completion(s4, solver)
+SQQC_mode = solveitSQQ_completion(s4, solver)
+
+resultc5, etc5 = @timed Projection_completion(s5, n)
+ProjC_max, ProjC_max_iter = resultc5
+# SDTC_max = solveitSDT_completion(s5, solver)
+SQVC_max = solveitSQV_completion(s5, solver)
+SQTC_max = solveitSQT_completion(s5, solver)
+SQQC_max = solveitSQQ_completion(s5, solver)
+
+resultc6, etc6 = @timed Projection_completion(s6, n)
+ProjC_min, ProjC_min_iter = resultc6
+# SDTC_min = solveitSDT_completion(s6, solver)
+SQVC_min = solveitSQV_completion(s6, solver)
+SQTC_min = solveitSQT_completion(s6, solver)
+SQQC_min = solveitSQQ_completion(s6, solver)
+
+resultc7, etc7 = @timed Projection_completion(s7, n)
+ProjC_r, ProjC_r_iter = resultc7
+# SDTC_r = solveitSDT_completion(s7, solver)
+SQVC_r = solveitSQV_completion(s7, solver)
+SQTC_r = solveitSQT_completion(s7, solver)
+SQQC_r = solveitSQQ_completion(s7, solver)
+
+result, et = @timed Projection_approx(s, n)
+Proj_0, Proj_0_iter = result
+# SDT_0 = solveitSDT_approx(s, solver)
+SQV_0 = solveitSQV_approx(s, solver)
+SQT_0 = solveitSQT_approx(s, solver)
+SQQ_0 = solveitSQQ_approx(s, solver)
+
+result1, et1 = @timed Projection_approx(s1, n)
+Proj_MEAN, Proj_MEAN_iter = result1
+# SDT_MEAN = solveitSDT_approx(s1, solver)
+SQV_MEAN = solveitSQV_approx(s1, solver)
+SQT_MEAN = solveitSQT_approx(s1, solver)
+SQQ_MEAN = solveitSQQ_approx(s1, solver)
+
+result2, et2 = @timed Projection_approx(s2, n)
+Proj_r_interval, Proj_r_interval_iter = result2
+# SDT_r_interval = solveitSDT_approx(s2, solver)
+SQV_r_interval = solveitSQV_approx(s2, solver)
+SQT_r_interval = solveitSQT_approx(s2, solver)
+SQQ_r_interval = solveitSQQ_approx(s2, solver)
+
+
+result3, et3 = @timed Projection_approx(s3, n)
+Proj_m, Proj_m_iter = result3
+# SDT_m = solveitSDT_approx(s3, solver)
+SQV_m = solveitSQV_approx(s3, solver)
+SQT_m = solveitSQT_approx(s3, solver)
+SQQ_m = solveitSQQ_approx(s3, solver)
+
+
+result4, et4 = @timed Projection_approx(s4, n)
+Proj_mode, Proj_mode_iter = result4
+# SDT_mode = solveitSDT_approx(s4, solver)
+SQV_mode = solveitSQV_approx(s4, solver)
+SQT_mode = solveitSQT_approx(s4, solver)
+SQQ_mode = solveitSQQ_approx(s4, solver)
+
+
+result5, et5 = @timed Projection_approx(s5, n)
+Proj_max, Proj_max_iter = result5
+# SDT_max = solveitSDT_approx(s5, solver)
+SQV_max = solveitSQV_approx(s5, solver)
+SQT_max = solveitSQT_approx(s5, solver)
+SQQ_max = solveitSQQ_approx(s5, solver)
+
+
+result6, et6 = @timed Projection_approx(s6, n)
+Proj_min, Proj_min_iter = result6
+# SDT_min = solveitSDT_approx(s6, solver)
+SQV_min = solveitSQV_approx(s6, solver)
+SQT_min = solveitSQT_approx(s6, solver)
+SQQ_min = solveitSQQ_approx(s6, solver)
+
+result7, et7 = @timed Projection_approx(s7, n)
+Proj_r, Proj_r_iter = result7
+# SDT_r = solveitSDT_approx(s7, solver)
+SQV_r = solveitSQV_approx(s7, solver)
+SQT_r = solveitSQT_approx(s7, solver)
+SQQ_r = solveitSQQ_approx(s7, solver)
+
+"Projex" => Projex, "ProjC_0" => ProjC_0, "SDHC_0" => SDHC_0, "SQVC_0" => SQVC_0, "SQHC_0" => SQHC_0, "SQQC_0" => SQQC_0
+"ProjC_MEAN" => ProjC_MEAN, "SDHC_MEAN" => SDHC_MEAN, "SQVC_MEAN" => SQVC_MEAN, "SQHC_MEAN" => SQHC_MEAN, "SQQC_MEAN" => SQQC_MEAN
+"ProjC_r_interval" => ProjC_r_interval, "SDHC_r_interval" => SDHC_r_interval, "SQVC_r_interval" => SQVC_r_interval, "SQHC_r_interval" => SQHC_r_interval, "SQQC_r_interval" => SQQC_r_interval
+"ProjC_m" => ProjC_m, "SDHC_m" => SDHC_m, "SQVC_m" => SQVC_m, "SQHC_m" => SQHC_m, "SQQC_m" => SQQC_m
+"ProjC_mode" => ProjC_mode, "SDHC_mode" => SDHC_mode, "SQVC_mode" => SQVC_mode, "SQHC_mode" => SQHC_mode, "SQQC_mode" => SQQC_mode
+"ProjC_max" => ProjC_max, "SDHC_max" => SDHC_max, "SQVC_max" => SQVC_max, "SQHC_max" => SQHC_max, "SQQC_max" => SQQC_max
+"ProjC_min" => ProjC_min, "SDHC_min" => SDHC_min, "SQVC_min" => SQVC_min, "SQHC_min" => SQHC_min, "SQQC_min" => SQQC_min
+"ProjC_r" => ProjC_r, "SDHC_r" => SDHC_r, "SQVC_r" => SQVC_r, "SQHC_r" => SQHC_r, "SQQC_r" => SQQC_r
+
+
+"Proj_0" => Proj_0, "SDH_0" => SDH_0, "SQV_0" => SQV_0, "SQH_0" => SQH_0, "SQQ_0" => SQQ_0
+"Proj_MEAN" => Proj_MEAN, "SDH_MEAN" => SDH_MEAN, "SQV_MEAN" => SQV_MEAN, "SQH_MEAN" => SQH_MEAN, "SQQ_MEAN" => SQQ_MEAN
+"Proj_r_interval" => Proj_r_interval, "SDH_r_interval" => SDH_r_interval, "SQV_r_interval" => SQV_r_interval, "SQH_r_interval" => SQH_r_interval, "SQQ_r_interval" => SQQ_r_interval
+"Proj_m" => Proj_m, "SDH_m" => SDH_m, "SQV_m" => SQV_m, "SQH_m" => SQH_m, "SQQ_m" => SQQ_m
+"Proj_mode" => Proj_mode, "SDH_mode" => SDH_mode, "SQV_mode" => SQV_mode, "SQH_mode" => SQH_mode, "SQQ_mode" => SQQ_mode
+"Proj_max" => Proj_max, "SDH_max" => SDH_max, "SQV_max" => SQV_max, "SQH_max" => SQH_max, "SQQ_max" => SQQ_max
+"Proj_min" => Proj_min, "SDH_min" => SDH_min, "SQV_min" => SQV_min, "SQH_min" => SQH_min, "SQQ_min" => SQQ_min
+"Proj_r" => Proj_r, "SDH_r" => SDH_r, "SQV_r" => SQV_r, "SQH_r" => SQH_r, "SQQ_r" => SQQ_r
+
+
+# hankel_matrix(s),hankel_matrix(s1)
+
+#Calculate the error 
+norm(ProjC_0 - Projex) / norm(Projex)
+norm(SDTC_0 - Projex) / norm(Projex)
+norm(SQVC_0 - Projex) / norm(Projex)
+norm(SQTC_0 - Projex) / norm(Projex)
+norm(SQQC_0 - Projex) / norm(Projex)
+
+norm(ProjC_MEAN - Projex) / norm(Projex)
+norm(SDTC_MEAN - Projex) / norm(Projex)
+norm(SQVC_MEAN - Projex) / norm(Projex)
+norm(SQTC_MEAN - Projex) / norm(Projex)
+norm(SQQC_MEAN - Projex) / norm(Projex)
+
+norm(ProjC_r_interval - Projex) / norm(Projex)
+norm(SDTC_r_interval - Projex) / norm(Projex)
+norm(SQVC_r_interval - Projex) / norm(Projex)
+norm(SQTC_r_interval - Projex) / norm(Projex)
+norm(SQQC_r_interval - Projex) / norm(Projex)
+
+
+norm(ProjC_m - Projex) / norm(Projex)
+norm(SDTC_m - Projex) / norm(Projex)
+norm(SQVC_m - Projex) / norm(Projex)
+norm(SQTC_m - Projex) / norm(Projex)
+norm(SQQC_m - Projex) / norm(Projex)
+
+norm(ProjC_mode - Projex) / norm(Projex)
+norm(SDTC_mode - Projex) / norm(Projex)
+norm(SQVC_mode - Projex) / norm(Projex)
+norm(SQTC_mode - Projex) / norm(Projex)
+norm(SQQC_mode - Projex) / norm(Projex)
+
+norm(ProjC_max - Projex) / norm(Projex)
+norm(SDTC_max - Projex) / norm(Projex)
+norm(SQVC_max - Projex) / norm(Projex)
+norm(SQTC_max - Projex) / norm(Projex)
+norm(SQQC_max - Projex) / norm(Projex)
+
+norm(ProjC_min - Projex) / norm(Projex)
+norm(SDTC_min - Projex) / norm(Projex)
+norm(SQVC_min - Projex) / norm(Projex)
+norm(SQTC_min - Projex) / norm(Projex)
+norm(SQQC_min - Projex) / norm(Projex)
+
+norm(ProjC_r - Projex) / norm(Projex)
+norm(SDTC_r - Projex) / norm(Projex)
+norm(SQVC_r - Projex) / norm(Projex)
+norm(SQTC_r - Projex) / norm(Projex)
+norm(SQQC_r - Projex) / norm(Projex)
+
+
+norm(Proj_0 - Projex) / norm(Projex)
+norm(SDT_0 - Projex) / norm(Projex)
+norm(SQV_0 - Projex) / norm(Projex)
+norm(SQT_0 - Projex) / norm(Projex)
+norm(SQQ_0 - Projex) / norm(Projex)
+
+norm(Proj_MEAN - Projex) / norm(Projex)
+norm(SDT_MEAN - Projex) / norm(Projex)
+norm(SQV_MEAN - Projex) / norm(Projex)
+norm(SQT_MEAN - Projex) / norm(Projex)
+norm(SQQ_MEAN - Projex) / norm(Projex)
+
+norm(Proj_r_interval - Projex) / norm(Projex)
+norm(SDT_r_interval - Projex) / norm(Projex)
+norm(SQV_r_interval - Projex) / norm(Projex)
+norm(SQT_r_interval - Projex) / norm(Projex)
+norm(SQQ_r_interval - Projex) / norm(Projex)
+
+norm(Proj_m - Projex) / norm(Projex)
+
+norm(SDT_m - Projex) / norm(Projex)
+norm(SQV_m - Projex) / norm(Projex)
+norm(SQT_m - Projex) / norm(Projex)
+norm(SQQ_m - Projex) / norm(Projex)
+
+norm(Proj_mode - Projex) / norm(Projex)
+norm(SDT_mode - Projex) / norm(Projex)
+norm(SQV_mode - Projex) / norm(Projex)
+norm(SQT_mode - Projex) / norm(Projex)
+norm(SQQ_mode - Projex) / norm(Projex)
+
+norm(Proj_max - Projex) / norm(Projex)
+norm(SDT_max - Projex) / norm(Projex)
+norm(SQV_max - Projex) / norm(Projex)
+norm(SQT_max - Projex) / norm(Projex)
+norm(SQQ_max - Projex) / norm(Projex)
+
+norm(Proj_min - Projex) / norm(Projex)
+norm(SDT_min - Projex) / norm(Projex)
+norm(SQV_min - Projex) / norm(Projex)
+norm(SQT_min - Projex) / norm(Projex)
+norm(SQQ_min - Projex) / norm(Projex)
+
+norm(Proj_r - Projex) / norm(Projex)
+norm(SDT_r - Projex) / norm(Projex)
+norm(SQV_r - Projex) / norm(Projex)
+norm(SQT_r - Projex) / norm(Projex)
+norm(SQQ_r - Projex) / norm(Projex)
